@@ -2,7 +2,11 @@
 
 import json
 
-def handler(event, context):
+def handler(request):
+    """Simple test endpoint"""
+    
+    method = request.get('method', 'GET')
+    
     return {
         'statusCode': 200,
         'headers': {
@@ -11,7 +15,7 @@ def handler(event, context):
         },
         'body': json.dumps({
             'status': 'success',
-            'message': 'API is working!',
-            'event': event
+            'message': 'Test endpoint is working!',
+            'method': method
         }, ensure_ascii=False)
     }
