@@ -11,6 +11,19 @@ from typing import Any, Dict, List, Optional, TypedDict, cast
 
 import requests
 
+# 修改日志配置部分 - Vercel 环境中只能写入 /tmp 目录
+log_file_path = "/tmp/company_profile.log" if os.getenv("VERCEL") else "company_profile.log"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(log_file_path),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
 # 加载.env文件
 try:
     from dotenv import load_dotenv
@@ -19,32 +32,6 @@ except ImportError:
     pass  # 如果没有安装python-dotenv，使用系统环境变量
 from langgraph.graph import END, START, StateGraph
 from prompts import COMPANY_PROFILE_SCHEMA, EXTRACTION_SYSTEM_PROMPT, build_extraction_user_prompt
-
-# 常见的招聘页面路径
-CAREERS_PATHS = [
-    "/careers",
-    "/jobs",
-    "/join-us",
-    "/recruitment",
-    "/careers.html",
-    "/jobs.html",
-    "/about/careers",
-    "/company/careers",
-    "/zh/careers",
-    "/zh/jobs",
-    "/en/careers",
-    "/en/jobs",
-]
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("company_profile.log"),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
 
 
 # 从环境变量读取配置，优先使用环境变量，其次使用默认值
