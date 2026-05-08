@@ -1,52 +1,47 @@
-"""API endpoint for company profile search."""
-
 import json
 import sys
 import os
-from http.server import BaseHTTPRequestHandler
-from io import BytesIO
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-class handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        self._handle_request()
+def handler(req, res):
+    """
+    Vercel Python Serverless Function
+    req: IncomingMessage (Node.js http.IncomingMessage)
+    res: ServerResponse (Node.js http.ServerResponse)
+    """
     
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/json; charset=utf-8')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
-        self.wfile.write(json.dumps({'status': 'ok'}, ensure_ascii=False).encode('utf-8'))
+    # Handle CORS preflight
+    if req.method == 'OPTIONS':
+        res.writeHead(200, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type'
+        })
+        res.end(json.dumps({'status': 'ok'}, ensure_ascii=False))
+        return
     
-    def _handle_request(self):
+    # Only allow POST method
+    if req.method != 'POST':
+        res.writeHead(405, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Access-Control-Allow-Origin': '*'
+        })
+        res.end(json.dumps({'error': 'Method not allowed'}, ensure_ascii=False))
+        return
+    
+    # Collect request body
+    body_parts = []
+    
+    def on_data(chunk):
+        body_parts.append(chunk)
+    
+    def on_end():
         try:
-            # Read request body
-            content_length = int(self.headers.get('Content-Length', 0))
-            body = self.rfile.read(content_length).decode('utf-8')
-            
-            from company_profile_search import company_profile_search_api
-            
-            data = json.loads(body or '{}')
-            
-            result = company_profile_search_api(
-                company_name=data.get("company_name", ""),
-                company_website=data.get("company_website", ""),
-                job_description=data.get("job_description", ""),
-                max_iterations=int(data.get("max_iterations", 2)),
-            )
-            
-            response_body = json.dumps(result, ensure_ascii=False)
-            
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json; charset=utf-8')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(response_body.encode('utf-8'))
-            
+            body = b''.join(body_parts).decode('utf-8')
+            process_request(body, res)
         except Exception as exc:
             import traceback
             error = {
@@ -55,15 +50,45 @@ class handler(BaseHTTPRequestHandler):
                 "traceback": traceback.format_exc(),
                 "missing_info": ["有效输入", "公司信息"],
             }
-            
-            response_body = json.dumps(error, ensure_ascii=False)
-            
-            self.send_response(500)
-            self.send_header('Content-Type', 'application/json; charset=utf-8')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(response_body.encode('utf-8'))
+            res.writeHead(500, {
+                'Content-Type': 'application/json; charset=utf-8',
+                'Access-Control-Allow-Origin': '*'
+            })
+            res.end(json.dumps(error, ensure_ascii=False))
     
-    def log_message(self, format, *args):
-        # Suppress default logging
-        pass
+    req.on('data', on_data)
+    req.on('end', on_end)
+
+def process_request(body, res):
+    """Process the request after body is fully received"""
+    try:
+        from company_profile_search import company_profile_search_api
+        
+        data = json.loads(body or '{}')
+        
+        result = company_profile_search_api(
+            company_name=data.get("company_name", ""),
+            company_website=data.get("company_website", ""),
+            job_description=data.get("job_description", ""),
+            max_iterations=int(data.get("max_iterations", 2)),
+        )
+        
+        res.writeHead(200, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Access-Control-Allow-Origin': '*'
+        })
+        res.end(json.dumps(result, ensure_ascii=False))
+        
+    except Exception as exc:
+        import traceback
+        error = {
+            "status": "failed",
+            "reason": str(exc),
+            "traceback": traceback.format_exc(),
+            "missing_info": ["有效输入", "公司信息"],
+        }
+        res.writeHead(500, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Access-Control-Allow-Origin': '*'
+        })
+        res.end(json.dumps(error, ensure_ascii=False))
