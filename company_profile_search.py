@@ -11,16 +11,11 @@ from typing import Any, Dict, List, Optional, TypedDict, cast
 
 import requests
 
-# 修改日志配置部分 - Vercel 环境中只能写入 /tmp 目录
-log_file_path = "/tmp/company_profile.log" if os.getenv("VERCEL") else "company_profile.log"
-
+# 日志配置 - 只输出到控制台，不写文件（兼容 Vercel）
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler(log_file_path),
-        logging.StreamHandler()
-    ]
+    handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
 
