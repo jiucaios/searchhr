@@ -1,0 +1,4 @@
+{
+  "runtime": "vercel-python@0.6.1",
+  "maxDuration": 60
+}
