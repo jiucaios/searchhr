@@ -1,12 +1,12 @@
-"""Local web demo server for the company profile search tool."""
+"""Web demo server for the company profile search tool - supports both local and Vercel."""
 
 from __future__ import annotations
 
 import json
 import mimetypes
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 from company_profile_search import company_profile_search_api
 
@@ -69,6 +69,92 @@ class DemoHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(content)))
         self.end_headers()
         self.wfile.write(content)
+
+
+def application(environ, start_response):
+    """WSGI application for Vercel deployment."""
+    from io import BytesIO
+
+    class MockRequest:
+        def __init__(self, environ):
+            self.environ = environ
+            self.rfile = BytesIO()
+            self.wfile = BytesIO()
+            
+        def send_response(self, status):
+            self.status = status
+            
+        def send_header(self, name, value):
+            if not hasattr(self, 'headers'):
+                self.headers = []
+            self.headers.append((name, value))
+            
+        def end_headers(self):
+            pass
+
+    method = environ['REQUEST_METHOD']
+    path = environ.get('PATH_INFO', '/')
+    length = int(environ.get('CONTENT_LENGTH', 0))
+    
+    if method == 'POST' and path == '/api/company-profile':
+        try:
+            body = environ['wsgi.input'].read(length)
+            payload = json.loads(body.decode('utf-8') or '{}')
+            result = company_profile_search_api(
+                company_name=payload.get("company_name", ""),
+                company_website=payload.get("company_website", ""),
+                job_description=payload.get("job_description", ""),
+                max_iterations=int(payload.get("max_iterations", 2)),
+            )
+            content = json.dumps(result, ensure_ascii=False, indent=2).encode('utf-8')
+            status = '200 OK'
+            headers = [
+                ('Content-Type', 'application/json; charset=utf-8'),
+                ('Content-Length', str(len(content)))
+            ]
+        except Exception as exc:
+            error = {
+                "status": "failed",
+                "reason": str(exc),
+                "missing_info": ["有效输入", "公司信息"],
+            }
+            content = json.dumps(error, ensure_ascii=False).encode('utf-8')
+            status = '500 Internal Server Error'
+            headers = [
+                ('Content-Type', 'application/json; charset=utf-8'),
+                ('Content-Length', str(len(content)))
+            ]
+    elif method == 'GET':
+        if path in {"/", "/index.html"}:
+            target = FRONTEND / "index.html"
+        else:
+            target = FRONTEND / path.lstrip("/")
+            
+        if target.exists() and target.is_file():
+            content = target.read_bytes()
+            content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+            status = '200 OK'
+            headers = [
+                ('Content-Type', content_type),
+                ('Content-Length', str(len(content)))
+            ]
+        else:
+            content = b'404 Not Found'
+            status = '404 Not Found'
+            headers = [
+                ('Content-Type', 'text/plain'),
+                ('Content-Length', str(len(content)))
+            ]
+    else:
+        content = b'404 Not Found'
+        status = '404 Not Found'
+        headers = [
+            ('Content-Type', 'text/plain'),
+            ('Content-Length', str(len(content)))
+        ]
+    
+    start_response(status, headers)
+    return [content]
 
 
 def main() -> None:
